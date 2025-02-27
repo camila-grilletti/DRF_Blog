@@ -17,3 +17,4 @@ psycopg2==2.9.4
 
 celery==5.4.0
 django-celery-results==2.5.1
+django-celery-beat==2.7.0
