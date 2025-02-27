@@ -1,5 +1,6 @@
 from rest_framework.generics import ListAPIView, RetrieveAPIView
 from rest_framework.views import APIView
+from rest_framework_api.views import StandardAPIView
 from rest_framework import permissions
 from rest_framework.response import Response
 from rest_framework.exceptions import NotFound, APIException
@@ -20,7 +21,7 @@ from core.permissions import HasValidAPIKey
 redis_client = redis.StrictRedis(host=settings.REDIS_HOST, port=6379, db=0)
 
 
-class PostListView(APIView):
+class PostListView(StandardAPIView):
     permission_classes = [HasValidAPIKey]
 
     def get(self, request, *args, **kwargs):
@@ -30,7 +31,7 @@ class PostListView(APIView):
             if cached_posts:
                 for post in cached_posts:
                     redis_client.incr(f'post:impressions:{post["id"]}')
-                return Response(cached_posts)
+                return self.paginate(request, cached_posts)
             
 
             posts = Post.postobjects.all()
@@ -50,20 +51,21 @@ class PostListView(APIView):
         except Exception as e:
             raise APIException(detail=f'An unexpected error ocurreed: {str(e)}')
             
-        return Response(serialized_posts)
+        return self.paginate(request, serialized_posts)
 
 
-class PostDetailView(APIView):
+class PostDetailView(StandardAPIView):
     permission_classes = [HasValidAPIKey]
 
-    def get(self, request, slug):
+    def get(self, request):
         ip_address = get_client_ip(request)
+        slug = request.query_params.get('slug')
         
         try:
             cached_post = cache.get(f'post_detail:{slug}')
             if cached_post:
-                increment_post_views_tasks.delay(slug, ip_address)
-                return Response(cached_post)
+                increment_post_views_tasks.delay(cached_post['slug'], ip_address)
+                return self.response(cached_post)
 
 
             post = Post.postobjects.get(slug=slug)
@@ -79,20 +81,20 @@ class PostDetailView(APIView):
         except Exception as e:
             raise APIException(detail=f'An unexpected error ocurreed: {str(e)}')
 
-        return Response(serialized_post)
+        return self.response(serialized_post)
     
 
-class PostHeadingView(ListAPIView):
+class PostHeadingView(StandardAPIView):
     permission_classes = [HasValidAPIKey]
-    serializer_class = HeadingSerializer
 
-    def get_queryset(self):
-        post_slug = self.kwargs.get('slug')
-        return Heading.objects.filter(post__slug = post_slug)
+    def get(self, request):
+        post_slug = request.query_params.get('slug')
+        heading_objects = Heading.objects.filter(post__slug=post_slug)
+        serializer_data = HeadingSerializer(heading_objects, many=True).data
+        return self.response(serializer_data)
     
 
-
-class IncrementPostClickView(APIView):
+class IncrementPostClickView(StandardAPIView):
     permission_classes = [HasValidAPIKey]
 
     def post(self, request):
@@ -109,7 +111,7 @@ class IncrementPostClickView(APIView):
         except Exception as e:
             raise APIException(detail=f'An unexpected error ocurreed: {str(e)}')
         
-        return Response({
+        return self.response({
             'message': 'Click incremented successfully',
             'clicks': post_analytics.clicks
         })
