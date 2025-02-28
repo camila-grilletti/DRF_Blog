@@ -3,6 +3,7 @@ from django.urls import reverse
 from django.conf import settings
 from django.core.cache import cache
 from rest_framework.test import APIClient
+from unittest.mock import patch
 
 from .models import Category, Post, PostAnalytics, Heading
 
@@ -18,6 +19,9 @@ class CategoryModelTest(TestCase):
             slug='tech'
         )
 
+    def tearDown(self):
+        cache.clear()
+        
     def test_category_creation(self):
         self.assertEqual(str(self.category), 'Tech')
         self.assertEqual(str(self.category.title), 'Technology')
@@ -44,6 +48,9 @@ class PostModelTest(TestCase):
             status='published',
         )
 
+    def tearDown(self):
+        cache.clear()
+        
     def test_post_creation(self):
         self.assertEqual(str(self.post), 'Post 1')
         self.assertEqual(self.category.name, 'Tech')
@@ -74,6 +81,9 @@ class PostAnalyticsModelTest(TestCase):
 
         self.analytics = PostAnalytics.objects.create(post=self.post)
 
+    def tearDown(self):
+        cache.clear()
+        
     def test_click_through_rate(self):
         self.analytics.increment_impressions()
         self.analytics.increment_click()
@@ -108,6 +118,9 @@ class HeadingModelTest(TestCase):
             order=1,
         )
 
+    def tearDown(self):
+        cache.clear()
+
     def test_heading_creation(self):
         self.assertEqual(self.heading.slug, 'heading-1')
         self.assertEqual(self.heading.level, 1)
@@ -137,6 +150,9 @@ class PostListViewTest(TestCase):
             category=self.category,
             status='published',
         )
+
+    def tearDown(self):
+        cache.clear()
     
     def test_get_post_list(self):
         url = reverse('posts-list')
