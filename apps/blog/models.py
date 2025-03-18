@@ -5,15 +5,16 @@ from django.dispatch import receiver
 from django.utils import timezone
 from django.utils.text import slugify
 from ckeditor.fields import RichTextField
+from core.storage_backends import PublicMediaStorage
 
 from .utils import get_client_ip
 
 def blog_thumbnail_directory(instance, filename):
-    return "blog/{0}/{1}".format(instance.title, filename)
+    return "thumbnails/blog/{0}/{1}".format(instance.title, filename)
 
 
 def category_thumbnail_directory(instance, filename):
-    return "blog_categories/{0}/{1}".format(instance.name, filename)
+    return "thumbnails/blog_categories/{0}/{1}".format(instance.name, filename)
 
 
 class Category(models.Model):
@@ -47,7 +48,7 @@ class Post(models.Model):
     title = models.CharField(max_length=128)
     description = models.CharField(max_length=256)
     content = RichTextField()
-    thumbnail = models.ImageField(upload_to=blog_thumbnail_directory)
+    thumbnail = models.ImageField(upload_to=blog_thumbnail_directory, storage=PublicMediaStorage())
     keywords = models.CharField(max_length=128)
     slug = models.CharField(max_length=128)
     category = models.ForeignKey(Category, on_delete=models.PROTECT)

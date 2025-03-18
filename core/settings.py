@@ -219,7 +219,7 @@ AWS_S3_CUSTOM_DOMAIN = '%s.s3.amazonaws.com' % AWS_STORAGE_BUCKET_NAME
 
 STORAGES = {
     "default": {
-        "BACKEND": "core.storage_backends.MediaStorage",
+        "BACKEND": "core.storage_backends.PublicMediaStorage",
     },
     "staticfiles": {
         "BACKEND": "core.storage_backends.StaticStorage",
