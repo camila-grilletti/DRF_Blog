@@ -5,7 +5,6 @@ from django.dispatch import receiver
 from django.utils import timezone
 from django.utils.text import slugify
 from ckeditor.fields import RichTextField
-from core.storage_backends import PublicMediaStorage
 
 from .utils import get_client_ip
 
@@ -48,7 +47,7 @@ class Post(models.Model):
     title = models.CharField(max_length=128)
     description = models.CharField(max_length=256)
     content = RichTextField()
-    thumbnail = models.ImageField(upload_to=blog_thumbnail_directory, storage=PublicMediaStorage())
+    thumbnail = models.ImageField(upload_to=blog_thumbnail_directory)
     keywords = models.CharField(max_length=128)
     slug = models.CharField(max_length=128)
     category = models.ForeignKey(Category, on_delete=models.PROTECT)

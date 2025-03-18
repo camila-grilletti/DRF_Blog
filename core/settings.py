@@ -41,7 +41,7 @@ DJANGO_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'storages'
+    # 'storages'
 ]
 
 PROJECTS_APPS = [
@@ -145,11 +145,11 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.1/howto/static-files/
 
-# STATIC_LOCATION = 'static'
-# STATIC_URL = 'static/'
-# STATIC_ROOT = os.path.join(BASE_DIR, 'static')
-# MEDIA_URL = 'media/'
-# MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+STATIC_LOCATION = 'static'
+STATIC_URL = 'static/'
+STATIC_ROOT = os.path.join(BASE_DIR, 'static')
+MEDIA_URL = 'media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
@@ -211,39 +211,37 @@ CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
 CELERY_BEAT_SCHEDULE = {}
 
 
-AWS_ACCESS_KEY_ID = env('AWS_ACCESS_KEY_ID')
-AWS_SECRET_ACCESS_KEY = env('AWS_SECRET_ACCESS_KEY')
-AWS_STORAGE_BUCKET_NAME = env('AWS_STORAGE_BUCKET_NAME')
-AWS_S3_REGION_NAME = env('AWS_S3_REGION_NAME')
-AWS_S3_CUSTOM_DOMAIN = '%s.s3.amazonaws.com' % AWS_STORAGE_BUCKET_NAME
+# AWS_ACCESS_KEY_ID = env('AWS_ACCESS_KEY_ID')
+# AWS_SECRET_ACCESS_KEY = env('AWS_SECRET_ACCESS_KEY')
+# AWS_STORAGE_BUCKET_NAME = env('AWS_STORAGE_BUCKET_NAME')
+# AWS_S3_REGION_NAME = env('AWS_S3_REGION_NAME')
+# AWS_S3_CUSTOM_DOMAIN = '%s.s3.amazonaws.com' % AWS_STORAGE_BUCKET_NAME
 
-STORAGES = {
-    "default": {
-        "BACKEND": "core.storage_backends.PublicMediaStorage",
-    },
-    "staticfiles": {
-        "BACKEND": "core.storage_backends.StaticStorage",
-    },
-}
+# STORAGES = {
+#     "default": {
+#         "BACKEND": "core.storage_backends.PublicMediaStorage",
+#     },
+#     "staticfiles": {
+#         "BACKEND": "core.storage_backends.StaticStorage",
+#     },
+# }
 
-# DEFAULT_FILE_STORAGE = "storages.backends.s3boto3.S3Boto3Storage"
+# AWS_QUERYSTRING_AUTH = False
+# AWS_S3_FILE_OVERWRITE = False
+# AWS_DEFAULT_ACL = "public-read"
+# AWS_QUERYSTRING_EXPIRE = 5
 
-AWS_QUERYSTRING_AUTH = False
-AWS_S3_FILE_OVERWRITE = False
-AWS_DEFAULT_ACL = "public-read"
-AWS_QUERYSTRING_EXPIRE = 5
-
-AWS_S3_OBJECT_PARAMETERS = {
-    "CacheControl": "max-age=86400"
-}
+# AWS_S3_OBJECT_PARAMETERS = {
+#     "CacheControl": "max-age=86400"
+# }
 
 
-STATIC_LOCATION = 'static'  
-STATIC_URL = f'{AWS_S3_CUSTOM_DOMAIN}/{STATIC_LOCATION}/'  
-STATICFILES_STORAGE = "core.storage_backends.StaticStorage"
-STATIC_ROOT = os.path.join(BASE_DIR, "static")
+# STATIC_LOCATION = 'static'  
+# STATIC_URL = f'{AWS_S3_CUSTOM_DOMAIN}/{STATIC_LOCATION}/'  
+# STATICFILES_STORAGE = "core.storage_backends.StaticStorage"
+# STATIC_ROOT = os.path.join(BASE_DIR, "static")
 
-MEDIA_LOCATION = 'media'
-MEDIA_URL = f'{AWS_S3_CUSTOM_DOMAIN}/{MEDIA_LOCATION}/'  
-MEDIA_ROOT = MEDIA_URL
+# MEDIA_LOCATION = 'media'
+# MEDIA_URL = f'{AWS_S3_CUSTOM_DOMAIN}/{MEDIA_LOCATION}/'  
+# MEDIA_ROOT = MEDIA_URL
 
