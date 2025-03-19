@@ -9,10 +9,11 @@ from django.conf import settings
 from django.utils.decorators import method_decorator
 from django.views.decorators.cache import cache_page
 from django.core.cache import cache
-from django.db.models import Q, F
+from django.db.models import Q, F, Prefetch
+from django.shortcuts import get_object_or_404
 
-from .models import Post, Heading, PostAnalytics, Category
-from .serializers import PostListSerializer, PostSerializer, HeadingSerializer
+from .models import Post, Heading, PostAnalytics, Category, CategoryAnalytics
+from .serializers import PostListSerializer, PostSerializer, HeadingSerializer, CategoryListSerializer
 from .tasks import increment_post_impressions
 from .utils import get_client_ip
 from .tasks import increment_post_views_tasks
@@ -32,17 +33,28 @@ class PostListView(StandardAPIView):
 
     def get(self, request, *args, **kwargs):
         try:
-            search = request.query_params.get("search", "")
+            search = request.query_params.get("search", "").strip()
             sorting = request.query_params.get("sorting", None)
             ordering = request.query_params.get("ordering", None)
             categories = request.query_params.getlist("category", [])
+            page = request.query_params.getlist("p", "1")
 
-            cached_posts = cache.get(f'post_list:{search}:{sorting}:{ordering}:{categories}')
+            cache_key = f'post_list:{search}:{sorting}:{ordering}:{categories}:{page}'
+            cached_posts = cache.get(cache_key)
             
             if cached_posts:
+                serialized_posts = PostListSerializer(cached_posts, many=True).data
+
                 for post in cached_posts:
                     redis_client.incr(f'post:impressions:{post["id"]}')
-                return self.paginate(request, cached_posts)
+                return self.paginate(request, serialized_posts)
+            
+            posts = Post.postobjects.all().select_related("category").prefetch_related(
+                Prefetch("post_analytics", to_attr="analytics_cache")
+            )
+            
+            if not posts.exists():
+                raise NotFound(detail='No posts found.')
 
             if search != "":
                 posts = Post.postobjects.filter(
@@ -51,11 +63,6 @@ class PostListView(StandardAPIView):
                     Q(content__icontains=search) |
                     Q(keywords__icontains=search)
                 )
-            else:
-                posts = Post.postobjects.all()
-
-            if not posts.exists():
-                raise NotFound(detail='No posts found.')
             
             if categories:
                 category_queries = Q()
@@ -72,7 +79,7 @@ class PostListView(StandardAPIView):
                         )
                         category_queries |= slug_query
                 
-                posts = posts.filter(category_queries).distinct()
+                posts = posts.filter(category_queries)
 
             if sorting:
                 if sorting == 'newest':
@@ -80,7 +87,7 @@ class PostListView(StandardAPIView):
                 elif sorting == 'recently_updated':
                     posts = posts.order_by('-updated_at')
                 elif sorting == 'most_viewed':
-                    posts = posts.annotate(popularity=F("post_analytics__views")).order_by('-popularity')
+                    posts = posts.annotate(popularity=F("analytics_cache__views")).order_by('-popularity')
 
             if ordering:
                 if ordering == 'az':
@@ -88,20 +95,20 @@ class PostListView(StandardAPIView):
                 elif ordering == 'za':
                     posts = posts.order_by('-title')
 
-            serialized_posts = PostListSerializer(posts, many=True).data
+            cache.set(cache_key, posts, timeout=60*5)
 
-            cache.set(f'post_list:{search}:{sorting}:{ordering}:{categories}', serialized_posts, timeout=60*5)
+            serialized_posts = PostListSerializer(posts, many=True).data
 
             for post in posts:
                 redis_client.incr(f'post:impressions:{post.id}')
+    
+            return self.paginate(request, serialized_posts)
 
         except Post.DoesNotExist:
             raise NotFound(detail='No posts found.')
         except Exception as e:
             raise APIException(detail=f'An unexpected error ocurreed: {str(e)}')
             
-        return self.paginate(request, serialized_posts)
-
 
 class PostDetailView(StandardAPIView):
     permission_classes = [HasValidAPIKey]
@@ -164,6 +171,139 @@ class IncrementPostClickView(StandardAPIView):
             'message': 'Click incremented successfully',
             'clicks': post_analytics.clicks
         })
+
+
+class CategoryListView(StandardAPIView):
+    def get(self, request):
+        try:
+            parent_slug = request.query_params.get("parent_slug", None)
+            search = request.query_params.get("search", "").strip()
+            ordering = request.query_params.get("ordering", None)
+            sorting = request.query_params.get("sorting", None)
+            page = request.query_params.get("p", "1")
+
+            cache_key = f'category_list:{page}:{ordering}:{sorting}:{search}:{parent_slug}'
+            cached_categories = cache.get(cache_key)
+            
+            if cached_categories:
+                serialized_categories = CategoryListSerializer(categories, many=True).data
+
+                for category in cached_categories:
+                    redis_client.incr(f'category:impressions:{category["id"]}')
+                return self.paginate(request, serialized_categories)
+
+            if parent_slug:
+                categories = Category.objects.filter(parent__slug=parent_slug).prefetch_related(
+                    Prefetch("category_analytics", to_attr="analytics_cache")
+                )
+            else:
+                categories = Category.objects.filter(parent__isnull=True).prefetch_related(
+                    Prefetch("category_analytics", to_attr="analytics_cache")
+                )
+
+            if not categories.exists():
+                raise NotFound(detail="No categories found.")
+            
+            if search != "":
+                categories = Category.objects.filter(
+                    Q(name__icontains=search) |
+                    Q(slug__icontains=search) |
+                    Q(title__icontains=search) |
+                    Q(description__icontains=search)
+                )
+
+            if sorting:
+                if sorting == 'newest':
+                    categories = categories.order_by("-created_at")
+                elif sorting == 'recently_updated':
+                    categories = categories.order_by('-updated_at')
+                elif sorting == 'most_viewed':
+                    categories = categories.annotate(popularity=F("analytics_cache__views")).order_by('-popularity')
+
+            if ordering:
+                if ordering == 'az':
+                    categories = categories.order_by("name")
+                elif ordering == 'za':
+                    categories = categories.order_by('-name')
+
+            cache.set(cache_key, categories, timeout=60*5)
+
+            serialized_categories = CategoryListSerializer(categories, many=True).data
+
+            for category in categories:
+                redis_client.incr(f'category:impressions:{category.id}')
+            
+            return self.paginate(request, serialized_categories)
+        
+        except Category.DoesNotExist:
+            raise NotFound(detail='No categories found.')
+        except Exception as e:
+            raise APIException(detail=f'An unexpected error ocurreed: {str(e)}')
+
+
+class CategoryDetailView(StandardAPIView):
+    permissions_classes = [HasValidAPIKey]
+
+    def get(self, request):
+        try:
+            slug = request.query_params.get('slug', None)
+            page = request.query_params.get('p', '1')
+
+            if not slug:
+                return self.error("Missing slug parameter")
+            
+            cache_key = f"category_posts:{slug}:{page}"
+            cached_data = cache.get(cache_key)
+            
+            if cached_data:
+                return self.paginate(request, cached_data)
+            
+            category = get_object_or_404(Category, slug=slug)
+
+            posts = Post.postobjects.filter(category=category).select_related('category').prefetch_related(
+                Prefetch("post_analytics", to_attr="analytics_cache")
+            )
+
+            if not posts.exists():
+                raise NotFound(detail=f"No posts found for category '{category.name}'.")
+            
+            serialized_posts = PostListSerializer(posts, many=True).data
+            
+            cache.set(cache_key, serialized_posts, timeout=60*5)
+
+            for post in posts:
+                redis_client.incr(f'post:impressions:{post.id}')
+
+            return self.paginate(request, serialized_posts)
+        
+        except Category.DoesNotExist:
+            raise NotFound(detail='No categories found.')
+        except Exception as e:
+            raise APIException(detail=f'An unexpected error occurred: {str(e)}')
+        
+
+class IncrementCategoryClickView(StandardAPIView):
+    permission_classes = [HasValidAPIKey]
+
+    def category(self, request):
+        data = request.data
+
+        try:
+            category = Category.objects.get(slug=data['slug'])
+        except Category.DoesNotExist:
+            raise NotFound(detail='The requested category does not exist.')
+        
+        try:
+            category_analytics, created = CategoryAnalytics.objects.get_or_create(category=category)
+            category_analytics.increment_click()
+        except Exception as e:
+            raise APIException(detail=f'An unexpected error ocurreed: {str(e)}')
+        
+        return self.response({
+            'message': 'Click incremented successfully',
+            'clicks': category_analytics.clicks
+        })
+
 
 class GenerateFakePostsView(StandardAPIView):
 
